@@ -1,10 +1,10 @@
 <?php
 //renders JSON of just the calendar specified in $_REQUEST['src']
 
-if(!isset($_REQUEST['src'])) die();
+if(!isset($_REQUEST['src'])) returnJSON('[]');
 
 require_once '../../settings.php';
-if(defined('AUTHKEY') && (!isset($_REQUEST['auth']) || $_REQUEST['auth']!==AUTHKEY)) die();
+if(defined('AUTHKEY') && (!isset($_REQUEST['auth']) || $_REQUEST['auth']!==AUTHKEY)) returnJSON('[]');
 
 $filterDaysBefore = isset($_REQUEST['filterDaysBefore'])? intval($_REQUEST['filterDaysBefore']): DEFAULT_DAYS;
 $filterDaysAfter = isset($_REQUEST['filterDaysAfter'])? intval($_REQUEST['filterDaysAfter']): DEFAULT_DAYS;
@@ -21,7 +21,8 @@ try {
   ));
   $ical->initUrl($_REQUEST['src']);
 } catch (\Exception $e) {
-  die($e);
+  //die($e);
+  returnJSON('[]');
 }
 
 //looking to mimic https://icalendar.org/iot.html (ish)
@@ -106,5 +107,11 @@ usort($events->events, function($a,$b){
 });
 
 //echo "<pre>".json_encode($events,JSON_PRETTY_PRINT)."</pre>";
-echo json_encode($events);
+returnJSON(json_encode($events));
+
+function returnJSON($content) {
+  header('Content-Type: application/json; charset=utf-8');
+  header('Content-Length: '.strlen($content)); //prevents Apache from transfer chunking
+  die($content);
+}
 ?>
