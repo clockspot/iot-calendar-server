@@ -5,10 +5,10 @@ define('DEFAULT_DATE_SHORT_FORMAT', 'm/d');
 define('DEFAULT_DAYS', 2);
 define('NWS_USER_AGENT', 'user agent string here');
 
-//For generating JSON for a single calendar at a time, via base path
-define('AUTHKEY','random auth string here'); //if present, this will require any requests to / to / to include ?auth=[authkey] in order to process
+//For /cal – generating JSON for a single calendar at a time
+define('AUTHKEY','random auth string here'); //if present, this will require any requests to /cal to include ?auth=[authkey] in order to process
 
-//For /full content JSON generation, by auth key
+//For full content JSON generation, by auth key
 //nws = National Weather Service WFO/Gridpoint
 //cals = iCalendar sources
 define('AUTHKEYS','{

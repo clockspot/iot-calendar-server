@@ -1,14 +1,14 @@
 <?php
 //renders JSON of everything per settings, given auth key
 
-if(!isset($_REQUEST['auth'])) die();
+if(!isset($_REQUEST['auth'])) returnJSON('[]');
 $auth = $_REQUEST['auth'];
 
 require_once '../settings.php';
 require_once '../vendor/autoload.php';
 
 $authkeys = json_decode(AUTHKEYS);
-if(!property_exists($authkeys,$auth)) die();
+if(!property_exists($authkeys,$auth)) returnJSON('[]');
 $prefs = $authkeys->$auth;
 
 if(property_exists($prefs,'tz')) date_default_timezone_set($prefs->tz);
@@ -89,7 +89,8 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       ));
       $ical->initUrl($cal->src);
     } catch (Exception $e) {
-      die($e);
+      //die($e);
+      returnJSON('[]');
     }
     
     $ies = $ical->eventsFromInterval($prefs->days.' days');
@@ -162,7 +163,7 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
 $j = array();
 foreach($c as $cd) $j[] = $cd; //convert to non-associative array
 
-if(isset($_REQUEST['sample'])) {
+if(isset($_REQUEST['sample'])) { //as html
   //Pretend display
   foreach($c as $cd) {
     //header
@@ -197,7 +198,12 @@ if(isset($_REQUEST['sample'])) {
   echo "<pre>".json_encode($j,JSON_PRETTY_PRINT)."</pre>";
 
 } else { //not sample
-  echo json_encode($j);
+  returnJSON(json_encode($j)); 
 }
 
+function returnJSON($content) {
+  header('Content-Type: application/json; charset=utf-8');
+  header('Content-Length: '.strlen($content)); //prevents Apache from transfer chunking
+  die($content);
+}
 ?>
