@@ -4,8 +4,8 @@
 if(!isset($_REQUEST['auth'])) die();
 $auth = $_REQUEST['auth'];
 
-require_once '../../settings.php';
-require_once '../../vendor/autoload.php';
+require_once '../settings.php';
+require_once '../vendor/autoload.php';
 
 $authkeys = json_decode(AUTHKEYS);
 if(!property_exists($authkeys,$auth)) die();
