@@ -3,13 +3,13 @@
 
 if(!isset($_REQUEST['src'])) die();
 
-require_once '../settings.php';
+require_once '../../settings.php';
 if(defined('AUTHKEY') && (!isset($_REQUEST['auth']) || $_REQUEST['auth']!==AUTHKEY)) die();
 
 $filterDaysBefore = isset($_REQUEST['filterDaysBefore'])? intval($_REQUEST['filterDaysBefore']): DEFAULT_DAYS;
 $filterDaysAfter = isset($_REQUEST['filterDaysAfter'])? intval($_REQUEST['filterDaysAfter']): DEFAULT_DAYS;
 
-require_once '../vendor/autoload.php';
+require_once '../../vendor/autoload.php';
 
 use ICal\ICal;
 
