@@ -1,11 +1,13 @@
 <?php
+//renders JSON of just the calendar specified in $_REQUEST['src']
+
 if(!isset($_REQUEST['src'])) die();
 
 require_once '../settings.php';
 if(defined('AUTHKEY') && (!isset($_REQUEST['auth']) || $_REQUEST['auth']!==AUTHKEY)) die();
 
-$filterDaysBefore = isset($_REQUEST['filterDaysBefore'])? intval($_REQUEST['filterDaysBefore']): 2;
-$filterDaysAfter = isset($_REQUEST['filterDaysAfter'])? intval($_REQUEST['filterDaysAfter']): 2;
+$filterDaysBefore = isset($_REQUEST['filterDaysBefore'])? intval($_REQUEST['filterDaysBefore']): DEFAULT_DAYS;
+$filterDaysAfter = isset($_REQUEST['filterDaysAfter'])? intval($_REQUEST['filterDaysAfter']): DEFAULT_DAYS;
 
 require_once '../vendor/autoload.php';
 
@@ -61,7 +63,7 @@ try {
 
 $events = new stdClass();
 $events->events = array();
-$ies = $ical->eventsFromInterval('2 days');
+$ies = $ical->eventsFromInterval($filterDaysAfter.' days');
 //echo "<pre>"; var_dump($ies);
 //echo "<pre>".json_encode($ies,JSON_PRETTY_PRINT)."</pre>";
 foreach($ies as $ie) {
@@ -88,7 +90,7 @@ foreach($ies as $ie) {
     $ddiff = $dstart->diff($dend);
     $event->duration = $ddiff->days*24*60 + $ddiff->h*60 + $ddiff->i;
   }
-  if(!$event->allday) $event->timestart = $dstart->format(TIMESTART_FORMAT);
+  if(!$event->allday) $event->timestart = $dstart->format(DEFAULT_TIME_FORMAT);
   $events->events[] = $event;
 }
 //shuffle($events->events); //temporary for testing
