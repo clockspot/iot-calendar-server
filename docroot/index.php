@@ -62,6 +62,9 @@ if(property_exists($prefs,'nws')) {
         $w->name = $p->name;
         $w->isDaytime = $p->isDaytime;
         $w->temperature = $p->temperature;
+        $precipPos = strpos($p->detailedForecast,'Chance of precipitation is ');
+        if($precipPos!==false) $precipPos += strlen('Chance of precipitation is ');
+        $w->precipChance = intval($precipPos!==false? substr($p->detailedForecast,$precipPos,strpos(substr($p->detailedForecast,$precipPos),"%")) : 0);
         $w->shortForecast = weatherReplace($p->shortForecast);
         $c[$dt]->weather[] = $w;
       }    
@@ -118,7 +121,8 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       //times
       if(!$event->allday) {
         $event->ltstart = $dstart->format('Hi'); //for sorting
-        $event->timestart = $dstart->format($prefs->timeformat);
+        $event->timestart = $dstart->format($dstart->format('i')=='00'?$prefs->timeFormatTopOfHour:$prefs->timeFormat);
+        if($prefs->timeIncludeEnd) $event->timeend = $dend->format($dend->format('i')=='00'?$prefs->timeFormatTopOfHour:$prefs->timeFormat);
       }
       //duration
       $ddiff = $dstart->diff($dend);
@@ -190,7 +194,7 @@ if(isset($_REQUEST['sample'])) { //as html
     foreach($cd->events as $ce) {
       echo "<li style='color: ".$ce->style."'>";
       if($ce->allday) echo "<strong>".$ce->summary."</strong>".($ce->dend!==$ce->dstart? " (thru ".$ce->dendShort.")": "");
-      else echo "<strong>".$ce->timestart."</strong> ".$ce->summary;
+      else echo "<strong>".$ce->timestart."</strong>".(property_exists($ce,'timeend')?'–'.$ce->timeend:'')." ".$ce->summary;
       echo "</li>";
     }
     echo "</ul>";
