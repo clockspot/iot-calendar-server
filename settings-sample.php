@@ -14,8 +14,10 @@ define('AUTHKEY','random auth string here'); //if present, this will require any
 define('AUTHKEYS','{
   "random auth string here": {
     "tz": "America/Chicago",
-    "timeformat": "G:i",
-    "dateshortformat": "n/j",
+    "timeFormat": "G:i",
+    "timeFormatTopOfHour": "G",
+    "timeIncludeEnd": true,
+    "dateShortFormat": "n/j",
     "days": 2,
     "latitude": 32.55,
     "longitude": -96.55,
@@ -27,8 +29,10 @@ define('AUTHKEYS','{
       },
       {
         "src": "ics url here",
-        "style": "red"
+        "style": "red",
+        "userAgent": "user agent string here"
       }  
     ]
   }
 }');
+//Some calendar sources require userAgent string (e.g. office365)
