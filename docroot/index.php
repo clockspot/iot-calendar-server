@@ -81,13 +81,14 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
   $events->events = array();
 
   foreach($prefs->cals as $cal) {
+    $ical = new ICal('ICal.ics', array(
+      'defaultSpan'                 => 1,
+      'filterDaysAfter'             => $prefs->days,
+      'filterDaysBefore'            => $prefs->days,
+    ));
     try {
-      $ical = new ICal('ICal.ics', array(
-        'defaultSpan'                 => 1,
-        'filterDaysAfter'             => $prefs->days,
-        'filterDaysBefore'            => $prefs->days,
-      ));
-      $ical->initUrl($cal->src);
+      if(property_exists($cal,'userAgent')) $ical->initURL($cal->src, null, null, $cal->userAgent);
+      else $ical->initUrl($cal->src);
     } catch (Exception $e) {
       //die($e);
       returnJSON('[]');
@@ -102,13 +103,13 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       //can't use dtstart_tz because that appears to be in the calendar's zone, which may not be the desired zone
       //so we'll use PHP DateTime objects to convert from the event zone to the desired zone (spec'd in settings)
       //extract event's zone (no zone for allday events)
-      $dz = array_key_exists('TZID',$ie->dtstart_array[0])? $ie->dtstart_array[0]['TZID']: null;
+      $dz = array_key_exists('TZID',$ie->dtstart_array[0])? $ical->timeZoneStringToDateTimeZone($ie->dtstart_array[0]['TZID']): null;
       //extract event's zoneless start and end times
       $dstart = $dz? substr($ie->dtstart_array[3], strpos($ie->dtstart_array[3],':')+1): $ie->dtstart_array[3];
       $dend = $dz? substr($ie->dtend_array[3], strpos($ie->dtend_array[3],':')+1): $ie->dtend_array[3];
       //convert to datetime objects using event's zone
-      $dstart = $dz? new DateTime($dstart, new DateTimeZone($dz)): new DateTime($dstart);
-      $dend = $dz? new DateTime($dend, new DateTimeZone($dz)): new DateTime($dend);
+      $dstart = $dz? new DateTime($dstart, $dz): new DateTime($dstart);
+      $dend = $dz? new DateTime($dend, $dz): new DateTime($dend);
       //set datetime objects to the web app's default zone
       $dstart->setTimezone(new DateTimeZone(date_default_timezone_get()));
       $dend->setTimezone(new DateTimeZone(date_default_timezone_get())); //TODO more efficient way to do this?
