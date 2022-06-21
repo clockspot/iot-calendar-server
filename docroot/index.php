@@ -62,6 +62,9 @@ if(property_exists($prefs,'nws')) {
         $w->name = $p->name;
         $w->isDaytime = $p->isDaytime;
         $w->temperature = $p->temperature;
+        $precipPos = strpos($p->detailedForecast,'Chance of precipitation is ');
+        if($precipPos!==false) $precipPos += strlen('Chance of precipitation is ');
+        $w->precipChance = intval($precipPos!==false? substr($p->detailedForecast,$precipPos,strpos(substr($p->detailedForecast,$precipPos),"%")) : 0);
         $w->shortForecast = weatherReplace($p->shortForecast);
         $c[$dt]->weather[] = $w;
       }    
