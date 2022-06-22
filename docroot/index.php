@@ -12,8 +12,8 @@ if(!property_exists($authkeys,$auth)) returnJSON('[]');
 $prefs = $authkeys->$auth;
 
 if(property_exists($prefs,'tz')) date_default_timezone_set($prefs->tz);
-if(!property_exists($prefs,'timeformat')) $prefs->timeformat = DEFAULT_TIME_FORMAT;
-if(!property_exists($prefs,'dateshortformat')) $prefs->dateshortformat = DEFAULT_DATE_SHORT_FORMAT;
+if(!property_exists($prefs,'timeFormat')) $prefs->timeFormat = DEFAULT_TIME_FORMAT;
+if(!property_exists($prefs,'dateShortFormat')) $prefs->dateShortFormat = DEFAULT_DATE_SHORT_FORMAT;
 if(!property_exists($prefs,'days')) $prefs->days = DEFAULT_DAYS;
 
 //prepare the data structure that will be returned as JSON for display
@@ -26,14 +26,14 @@ for($i=0; $i<$prefs->days; $i++){
   $date->weekdayShort = $d->format("D");
   $date->weekdayRelative = ($i==0? 'Today': ($i==1? 'Tomorrow': $date->weekday));
   $date->date = $d->format("j");
-  $date->dateShort = $d->format($prefs->dateshortformat);
+  $date->dateShort = $d->format($prefs->dateShortFormat);
   $date->month = $d->format("F");
   $date->monthShort = $d->format("M");
   if($i==0) {
     if(property_exists($prefs,'latitude') && property_exists($prefs,'longitude')) {
       $date->sun = date_sun_info($d->format('U'),$prefs->latitude,$prefs->longitude);
       foreach($date->sun as $k=>$s) {
-        if($s) $date->sun[$k] = date($prefs->timeformat, $s);
+        if($s) $date->sun[$k] = date($prefs->timeFormat, $s);
       }
     }
   } 
@@ -130,12 +130,12 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       //dates
       $event->dstart = $dstart->format('Y-m-d');
       $event->ldstart = $dstart->format('Ymd');
-      $event->dstartShort = $dstart->format($prefs->dateshortformat);
+      $event->dstartShort = $dstart->format($prefs->dateShortFormat);
       //if it's an all-day event (e.g. duration is multiple of 1440), take a day off $dend
       if($event->allday) $dend->sub(new DateInterval("P1D"));
       $event->dend = $dend->format('Y-m-d');
       $event->ldend = $dend->format('Ymd');
-      $event->dendShort = $dend->format($prefs->dateshortformat);
+      $event->dendShort = $dend->format($prefs->dateShortFormat);
 
       $event->style = $cal->style; //i.e. which calendar it came from
 
