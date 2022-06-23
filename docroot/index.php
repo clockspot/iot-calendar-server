@@ -48,7 +48,7 @@ for($i=0; $i<$prefs->days; $i++){
         $date->sky->dawn = $scst['nightEnd']->format($prefs->timeFormat);
         $date->sky->dusk = $scst['night']->format($prefs->timeFormat);
       }
-      $date->sky->moonfixed = (isset($scmt['alwaysUp'])&&$scmt['alwaysUp']?"Always Up":(isset($scmt['alwaysDown'])&&$scmt['alwaysDown']?"Always Down":false));
+      $date->sky->moonfixed = (isset($scmt['alwaysUp'])&&$scmt['alwaysUp']?"Up":(isset($scmt['alwaysDown'])&&$scmt['alwaysDown']?"Down":false));
       if(!$date->sky->moonfixed) {
         $date->sky->moonrise = $scmt['moonrise']->format($prefs->timeFormat);
         $date->sky->moonset = $scmt['moonset']->format($prefs->timeFormat);
