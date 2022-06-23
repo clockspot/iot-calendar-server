@@ -53,12 +53,6 @@ for($i=0; $i<$prefs->days; $i++){
         $date->sky->moonupfirst = ($scmt['moonset'] < $scmt['moonrise']);
       }
       $date->sky->moonphase = strval(floor($scmi['phase']*100)).'%';
-      //Sunrise 12-15 Sunset X-72
-      //Moonrise X Moonset X Phase X
-
-      echo "<pre>".print_r($sc->getSunTimes(),true)."</pre>";
-      echo "<pre>".print_r($sc->getMoonTimes(),true)."</pre>";
-      echo "<pre>".print_r($sc->getMoonIllumination(),true)."</pre>";
     }
   } 
   $date->weather = array();
