@@ -22,6 +22,7 @@ define('AUTHKEYS','{
     "latitude": 32.55,
     "longitude": -96.55,
     "nws": "FWD/86,102",
+    "showDawnDusk": true,
     "cals": [
       {
         "src": "ics url here",

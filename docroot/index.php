@@ -42,10 +42,12 @@ for($i=0; $i<$prefs->days; $i++){
       $scmt = $sc->getMoonTimes();
       $scmi = $sc->getMoonIllumination();
       $date->sky = new stdClass();
-      $date->sky->dawn = $scst['nightEnd']->format($prefs->timeFormat); //astro
       $date->sky->sunrise = $scst['sunrise']->format($prefs->timeFormat);
       $date->sky->sunset = $scst['sunset']->format($prefs->timeFormat);
-      $date->sky->dusk = $scst['night']->format($prefs->timeFormat); //astro
+      if($prefs->showDawnDusk) { //astronomical sunrise/sunset
+        $date->sky->dawn = $scst['nightEnd']->format($prefs->timeFormat);
+        $date->sky->dusk = $scst['night']->format($prefs->timeFormat);
+      }
       $date->sky->moonfixed = (isset($scmt['alwaysUp'])&&$scmt['alwaysUp']?"Always Up":(isset($scmt['alwaysDown'])&&$scmt['alwaysDown']?"Always Down":false));
       if(!$date->sky->moonfixed) {
         $date->sky->moonrise = $scmt['moonrise']->format($prefs->timeFormat);
