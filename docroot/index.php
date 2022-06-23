@@ -31,10 +31,34 @@ for($i=0; $i<$prefs->days; $i++){
   $date->monthShort = $d->format("M");
   if($i==0) {
     if(property_exists($prefs,'latitude') && property_exists($prefs,'longitude')) {
-      $date->sun = date_sun_info($d->format('U'),$prefs->latitude,$prefs->longitude);
-      foreach($date->sun as $k=>$s) {
-        if($s) $date->sun[$k] = date($prefs->timeFormat, $s);
+      //built-in approach
+      // $date->sun = date_sun_info($d->format('U'),$prefs->latitude,$prefs->longitude);
+      // foreach($date->sun as $k=>$s) {
+      //   if($s) $date->sun[$k] = date($prefs->timeFormat, $s);
+      // }
+      //more accurate approach that includes moon stuff
+      $sc = new AurorasLive\SunCalc(new DateTime(), $prefs->latitude, $prefs->longitude);
+      $scst = $sc->getSunTimes();
+      $scmt = $sc->getMoonTimes();
+      $scmi = $sc->getMoonIllumination();
+      $date->sky = new stdClass();
+      $date->sky->dawn = $scst['nightEnd']->format($prefs->timeFormat); //astro
+      $date->sky->sunrise = $scst['sunrise']->format($prefs->timeFormat);
+      $date->sky->sunset = $scst['sunset']->format($prefs->timeFormat);
+      $date->sky->dusk = $scst['night']->format($prefs->timeFormat); //astro
+      $date->sky->moonfixed = (isset($scmt['alwaysUp'])&&$scmt['alwaysUp']?"Always Up":(isset($scmt['alwaysDown'])&&$scmt['alwaysDown']?"Always Down":false));
+      if(!$date->sky->moonfixed) {
+        $date->sky->moonrise = $scmt['moonrise']->format($prefs->timeFormat);
+        $date->sky->moonset = $scmt['moonset']->format($prefs->timeFormat);
+        $date->sky->moonupfirst = ($scmt['moonset'] < $scmt['moonrise']);
       }
+      $date->sky->moonphase = strval(floor($scmi['phase']*100)).'%';
+      //Sunrise 12-15 Sunset X-72
+      //Moonrise X Moonset X Phase X
+
+      echo "<pre>".print_r($sc->getSunTimes(),true)."</pre>";
+      echo "<pre>".print_r($sc->getMoonTimes(),true)."</pre>";
+      echo "<pre>".print_r($sc->getMoonIllumination(),true)."</pre>";
     }
   } 
   $date->weather = array();

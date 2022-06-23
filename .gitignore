@@ -2,3 +2,4 @@ settings.php
 composer.lock
 composer.phar
 /vendor/
+.DS_Store
