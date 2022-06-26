@@ -55,7 +55,8 @@ for($i=0; $i<$prefs->days; $i++){
         $date->sky->moonupfirst = ($scmt['moonset'] < $scmt['moonrise']);
       }
       //$date->sky->moonphase = strval(floor($scmi['phase']*100)).'%'; //percentage
-      $date->sky->moonphase = phaseName(octophase($scmi['phase']));
+      $date->sky->moonphase = octophase($scmi['phase']);
+      $date->sky->moonphaseName = phaseName(octophase($scmi['phase']));
     }
   } 
   $date->weather = array();
