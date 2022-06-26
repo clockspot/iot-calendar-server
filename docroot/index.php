@@ -12,9 +12,15 @@ if(!property_exists($authkeys,$auth)) returnJSON('[]');
 $prefs = $authkeys->$auth;
 
 if(property_exists($prefs,'tz')) date_default_timezone_set($prefs->tz);
-if(!property_exists($prefs,'timeFormat')) $prefs->timeFormat = DEFAULT_TIME_FORMAT;
-if(!property_exists($prefs,'dateShortFormat')) $prefs->dateShortFormat = DEFAULT_DATE_SHORT_FORMAT;
-if(!property_exists($prefs,'days')) $prefs->days = DEFAULT_DAYS;
+if(!property_exists($prefs,'timeFormat')) $prefs->timeFormat = (defined('DEFAULT_TIME_FORMAT')? DEFAULT_TIME_FORMAT: 'G:i');
+if(!property_exists($prefs,'dateShortFormat')) $prefs->dateShortFormat = (defined('DEFAULT_DATE_SHORT_FORMAT')? DEFAULT_DATE_SHORT_FORMAT: "n/j");
+if(!property_exists($prefs,'days')) $prefs->days = (defined('DEFAULT_DAYS')? DEFAULT_DAYS: 2);
+if(!property_exists($prefs,'charsetTo') && defined('DEFAULT_CHARSET_TO')) $prefs->charsetTo = DEFAULT_CHARSET_TO;
+
+function cleanString($prefs,$input) {
+  if(property_exists($prefs,'charsetTo')) return iconv('UTF-8', $prefs->charsetTo, $input);
+  return $input;
+}
 
 //prepare the data structure that will be returned as JSON for display
 $c = array(); 
@@ -109,7 +115,7 @@ if(property_exists($prefs,'nws')) {
         $precipPos = strpos($p->detailedForecast,'Chance of precipitation is ');
         if($precipPos!==false) $precipPos += strlen('Chance of precipitation is ');
         $w->precipChance = intval($precipPos!==false? substr($p->detailedForecast,$precipPos,strpos(substr($p->detailedForecast,$precipPos),"%")) : 0);
-        $w->shortForecast = weatherReplace($p->shortForecast);
+        $w->shortForecast = cleanString($prefs,weatherReplace($p->shortForecast));
         $c[$dt]->weather[] = $w;
       }    
     }
@@ -117,7 +123,7 @@ if(property_exists($prefs,'nws')) {
 } //end if nws specified
 
 function weatherReplace($in) {
-  return str_replace(['Showers And Thunderstorms','Slight Chance','Chance'],['Rain','SlCh','Ch'],$in);
+  return str_replace(['Showers And Thunderstorms','Slight Chance','Chance'],['Rain','Ch.','Ch.'],$in);
 }
 
 //Calendars
@@ -146,7 +152,7 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
     //echo "<pre>".json_encode($ies,JSON_PRETTY_PRINT)."</pre>";
     foreach($ies as $ie) {
       $event = new stdClass();
-      $event->summary = $ie->summary;
+      $event->summary = cleanString($prefs,$ie->summary);
       //can't use dtstart_tz because that appears to be in the calendar's zone, which may not be the desired zone
       //so we'll use PHP DateTime objects to convert from the event zone to the desired zone (spec'd in settings)
       //extract event's zone (no zone for allday events)
@@ -165,8 +171,8 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       //times
       if(!$event->allday) {
         $event->ltstart = $dstart->format('Hi'); //for sorting
-        $event->timestart = $dstart->format($dstart->format('i')=='00'?$prefs->timeFormatTopOfHour:$prefs->timeFormat);
-        if($prefs->timeIncludeEnd) $event->timeend = $dend->format($dend->format('i')=='00'?$prefs->timeFormatTopOfHour:$prefs->timeFormat);
+        $event->timestart = $dstart->format($dstart->format('i')=='00' && property_exists($prefs,'timeFormatTopOfHour')? $prefs->timeFormatTopOfHour: $prefs->timeFormat);
+        if($prefs->timeIncludeEnd) $event->timeend = $dend->format($dend->format('i')=='00' && property_exists($prefs,'timeFormatTopOfHour')? $prefs->timeFormatTopOfHour: $prefs->timeFormat);
       }
       //duration
       $ddiff = $dstart->diff($dend);
