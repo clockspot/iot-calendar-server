@@ -54,12 +54,35 @@ for($i=0; $i<$prefs->days; $i++){
         $date->sky->moonset = $scmt['moonset']->format($prefs->timeFormat);
         $date->sky->moonupfirst = ($scmt['moonset'] < $scmt['moonrise']);
       }
-      $date->sky->moonphase = strval(floor($scmi['phase']*100)).'%';
+      //$date->sky->moonphase = strval(floor($scmi['phase']*100)).'%'; //percentage
+      $date->sky->moonphase = phaseName(octophase($scmi['phase']));
     }
   } 
   $date->weather = array();
   $date->events = array();
   $c[$d->format('Y-m-d')] = $date;
+}
+
+function octophase($i) {
+  //Converts moonphase from float (0 <= $i < 1)
+  //to eighths, offset forward by a sixteenth so it's centered around the event
+  //e.g. 1/16 to 3/16 = waxing crescent, 3/16 to 5/16 = first quarter...
+  $o = floor((floor($i*16)+1)/2);
+  if($o>=8) $o -= 8;
+  return $o;
+}
+function phaseName($i) {
+  switch($i) {
+    case 0: return "New";
+    case 1: return "1/8";
+    case 2: return "1/4";
+    case 3: return "3/8";
+    case 4: return "Full";
+    case 5: return "5/8";
+    case 6: return "3/4";
+    case 7: return "7/8";
+    default: break;
+  }
 }
 
 //Weather
@@ -193,12 +216,11 @@ if(isset($_REQUEST['sample'])) { //as html
   foreach($c as $cd) {
     //header
     if($cd->weekdayRelative=='Today') {
-      echo "<h2>".$cd->weekdayShort." <span style='font-size: 1.5em;'>".$cd->date."</span> ".$cd->monthShort."</h2>";
+      echo "<h2>$cd->weekdayShort $cd->monthShort $cd->date</h2>";
       //sunrise, sunset
-      if(property_exists($cd,'sun')) echo "<p>".($cd->sun['sunrise']? "Sunrise <strong>".$cd->sun['sunrise']."</strong>": "")." &nbsp; ".($cd->sun['sunset']? "Sunset <strong>".$cd->sun['sunset']."</strong>": "")."</p>";
-      //moon TODO
+      if(property_exists($cd,'sky')) echo "<p><strong>Sun ".$cd->sky->sunrise."</strong>&ndash;".$cd->sky->sunset." &nbsp; <strong>Moon</strong> ".(!$cd->sky->moonupfirst? "<strong>".$cd->sky->moonrise."</strong>&ndash;".$cd->sky->moonset: $cd->sky->moonset."/<strong>".$cd->sky->moonrise."</strong>")."&nbsp; ".$cd->sky->moonphase."</p>";
     } else {
-      echo "<h3><strong>".$cd->weekdayRelative." ".$cd->dateShort."</strong></h3>";
+      echo "<h3>$cd->weekdayShort $cd->monthShort $cd->date</h3>";
     }
     //weather
     echo "<ul style='list-style-type: none; padding-left: 0;'>";
@@ -206,7 +228,7 @@ if(isset($_REQUEST['sample'])) { //as html
       echo "<li><strong>";
       echo ($cw->isDaytime?'High ':'Low ');
       //echo $cw->name.' ';
-      echo $cw->temperature."°</strong> ".$cw->shortForecast."</li>";
+      echo $cw->temperature."°</strong>".($cw->precipChance?"/$cw->precipChance%":'')."&nbsp; ".$cw->shortForecast."</li>";
     }
     echo "</ul>";
     //events
