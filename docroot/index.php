@@ -48,17 +48,17 @@ for($i=0; $i<$prefs->days; $i++){
       $scmt = $sc->getMoonTimes();
       $scmi = $sc->getMoonIllumination();
       $date->sky = new stdClass();
-      $date->sky->sunrise = $scst['sunrise']->format($prefs->timeFormat);
-      $date->sky->sunset = $scst['sunset']->format($prefs->timeFormat);
+      $date->sky->sunrise = returnTime($scst['sunrise'],$prefs->timeFormat);
+      $date->sky->sunset = returnTime($scst['sunset'],$prefs->timeFormat);
       if($prefs->showDawnDusk) { //astronomical sunrise/sunset
-        $date->sky->dawn = $scst['nightEnd']->format($prefs->timeFormat);
-        $date->sky->dusk = $scst['night']->format($prefs->timeFormat);
+        $date->sky->dawn = returnTime($scst['nightEnd'],$prefs->timeFormat);
+        $date->sky->dusk = returnTime($scst['night'],$prefs->timeFormat);
       }
       $date->sky->moonfixed = (isset($scmt['alwaysUp'])&&$scmt['alwaysUp']?"Up":(isset($scmt['alwaysDown'])&&$scmt['alwaysDown']?"Down":false));
       if(!$date->sky->moonfixed) {
-        $date->sky->moonrise = $scmt['moonrise']->format($prefs->timeFormat);
-        $date->sky->moonset = $scmt['moonset']->format($prefs->timeFormat);
-        $date->sky->moonupfirst = ($scmt['moonset'] < $scmt['moonrise']);
+        $date->sky->moonrise = returnTime($scmt['moonrise'],$prefs->timeFormat);
+        $date->sky->moonset = returnTime($scmt['moonset'],$prefs->timeFormat);
+        $date->sky->moonupfirst = ($date->sky->moonset < $date->sky->moonrise);
       }
       //$date->sky->moonphase = strval(floor($scmi['phase']*100)).'%'; //percentage
       $date->sky->moonphase = octophase($scmi['phase']);
@@ -68,6 +68,16 @@ for($i=0; $i<$prefs->days; $i++){
   $date->weather = array();
   $date->events = array();
   $c[$d->format('Y-m-d')] = $date;
+}
+
+function returnTime(&$d,&$f){
+  if(isset($d)) {
+    if($d) {
+      if($d instanceof DateTime) {
+        return $d->format($f);
+      } else return $d;
+    } else return "???";
+  } else return "????";
 }
 
 function octophase($i) {
