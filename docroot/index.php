@@ -1,6 +1,11 @@
 <?php
 //renders JSON of everything per settings, given auth key
 
+define('PROJROOT',__DIR__.'/../'); //TODO convert to class
+$d = new DateTime();
+define('DATE_NOW',$d->format('Y-m-d'));
+define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
+
 if(!isset($_REQUEST['auth'])) {
   logRequest('no auth provided');
   returnJSON('[]');
@@ -28,16 +33,19 @@ function cleanString($prefs,$input) {
   return $input;
 }
 
-$d = new DateTime();
-
 //if we have a cache for today's date, return that instead
 if(defined('CACHE_DIR') && CACHE_DIR) {
-  $cacheLoc = __DIR__.'/'.CACHE_DIR.'/'.$d->format('Y-m-d').'.json';
-  if(file_exists($cacheLoc) && is_readable($cacheLoc)) {
-    $cacheData = file_get_contents($cacheLoc);
+  $cacheLoc = CACHE_DIR.'/'.DATE_NOW.'.json';
+  if(file_exists(PROJROOT.$cacheLoc) && is_readable(PROJROOT.$cacheLoc)) {
+    $cacheData = file_get_contents(PROJROOT.$cacheLoc);
     if($cacheData) { //we've got something to return
-      logRequest('returning '.strlen($cacheData).' bytes from cache');
-      returnJSON($cacheData);
+      if(isset($_REQUEST['sample'])) { //as html
+        returnHTML(null,$cacheData);
+        logRequest('returning '.strlen($cacheData).' bytes from cache (as sample HTML)');
+      } else { //not sample; for real  
+        logRequest('returning '.strlen($cacheData).' bytes from cache');
+        returnJSON($cacheData);
+      }
       die();
     }
   }
@@ -249,58 +257,64 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
 $j = array();
 foreach($c as $cd) $j[] = $cd; //convert to non-associative array
 
+//write cache if applicable
+$dNow = new DateTime(); //since $d has probably been set forward
+$cacheResult = '';
+try {
+  if(!defined('CACHE_DIR')) throw new Exception('no cache dir defined');
+  if(!CACHE_DIR) throw new Exception('no cache dir value specified');
+  if(!file_exists(PROJROOT.CACHE_DIR)) throw new Exception('cache dir does not exist');
+  if(!is_writable(PROJROOT.CACHE_DIR)) throw new Exception('cache dir not writable');
+  $cacheLoc = CACHE_DIR.'/'.DATE_NOW.'.json';
+  if(file_exists(PROJROOT.$cacheLoc)) throw new Exception('cache file '.$cacheLoc.' already exists');
+  if(file_put_contents(PROJROOT.$cacheLoc,json_encode($j))===false) throw new Exception('could not write '.$cacheLoc);
+  $cacheResult = 'wrote cache to '.$cacheLoc;
+} catch(Exception $e) {
+  $cacheResult = $e->getMessage();
+}
+
+//return
 if(isset($_REQUEST['sample'])) { //as html
-  //Pretend display
-  foreach($c as $cd) {
-    //header
-    if($cd->weekdayRelative=='Today') {
-      echo "<h2>$cd->weekdayShort $cd->monthShort $cd->date</h2>";
-      //sunrise, sunset
-      if(property_exists($cd,'sky')) echo "<p><strong>Sun ".$cd->sky->sunrise."</strong>&ndash;".$cd->sky->sunset." &nbsp; <strong>Moon</strong> ".(!$cd->sky->moonupfirst? "<strong>".$cd->sky->moonrise."</strong>&ndash;".$cd->sky->moonset: $cd->sky->moonset."/<strong>".$cd->sky->moonrise."</strong>")."&nbsp; ".$cd->sky->moonphase."</p>";
-    } else {
-      echo "<h3>$cd->weekdayShort $cd->monthShort $cd->date</h3>";
-    }
-    //weather
-    echo "<ul style='list-style-type: none; padding-left: 0;'>";
-    foreach($cd->weather as $cw) {
-      echo "<li><strong>";
-      echo ($cw->isDaytime?'High ':'Low ');
-      //echo $cw->name.' ';
-      echo $cw->temperature."°</strong>".($cw->precipChance?"/$cw->precipChance%":'')."&nbsp; ".$cw->shortForecast."</li>";
-    }
-    echo "</ul>";
-    //events
-    echo "<ul>";
-    foreach($cd->events as $ce) {
-      echo "<li style='color: ".$ce->style."'>";
-      if($ce->allday) echo "<strong>".$ce->summary."</strong>".($ce->dend!==$ce->dstart? " (thru ".$ce->dendShort.")": "");
-      else echo "<strong>".$ce->timestart."</strong>".(property_exists($ce,'timeend')?'–'.$ce->timeend:'')." ".$ce->summary;
-      echo "</li>";
-    }
-    echo "</ul>";
-  }
-
-  logRequest('returning '.strlen(json_encode($j,JSON_PRETTY_PRINT)).' bytes from source (as sample HTML)');
-  echo "<pre>".json_encode($j,JSON_PRETTY_PRINT)."</pre>";
-
-} else { //not sample
-  $cacheResult = '';
-  try {
-    if(!defined('CACHE_DIR')) throw new Exception('no cache dir defined');
-    if(!CACHE_DIR) throw new Exception('no cache dir value specified');
-    if(!file_exists(__DIR__.'/'.CACHE_DIR)) throw new Exception('cache dir does not exist');
-    if(!is_writable(__DIR__.'/'.CACHE_DIR)) throw new Exception('cache dir not writable');
-    $cacheLoc = __DIR__.'/'.CACHE_DIR.'/'.$d->format('Y-m-d').'.json';
-    if(file_exists($cacheLoc)) throw new Exception('cache file '.$cacheLoc.' already exists');
-    if(file_put_contents($cacheLoc,json_encode($j))===false) throw new Exception('could not write '.$cacheLoc);
-    $cacheResult = 'wrote cache to '.$cacheLoc;
-  } catch(Exception $e) {
-    $cacheResult = $e->getMessage();
-  }
-  
+  returnHTML($c,json_encode($j,JSON_PRETTY_PRINT));
+  logRequest('returning '.strlen(json_encode($j,JSON_PRETTY_PRINT)).' bytes from source (as sample HTML); '.$cacheResult);
+} else { //not sample; for real  
   logRequest('returning '.strlen(json_encode($j)).' bytes from source; '.$cacheResult);
-  
   returnJSON(json_encode($j)); 
+}
+
+function returnHTML($c,$j) {
+  //just echoes out
+  if($c) {
+    foreach($c as $cd) {
+      //header
+      if($cd->weekdayRelative=='Today') {
+        echo "<h2>$cd->weekdayShort $cd->monthShort $cd->date</h2>";
+        //sunrise, sunset
+        if(property_exists($cd,'sky')) echo "<p><strong>Sun ".$cd->sky->sunrise."</strong>&ndash;".$cd->sky->sunset." &nbsp; <strong>Moon</strong> ".(!$cd->sky->moonupfirst? "<strong>".$cd->sky->moonrise."</strong>&ndash;".$cd->sky->moonset: $cd->sky->moonset."/<strong>".$cd->sky->moonrise."</strong>")."&nbsp; ".$cd->sky->moonphase."</p>";
+      } else {
+        echo "<h3>$cd->weekdayShort $cd->monthShort $cd->date</h3>";
+      }
+      //weather
+      echo "<ul style='list-style-type: none; padding-left: 0;'>";
+      foreach($cd->weather as $cw) {
+        echo "<li><strong>";
+        echo ($cw->isDaytime?'High ':'Low ');
+        //echo $cw->name.' ';
+        echo $cw->temperature."°</strong>".($cw->precipChance?"/$cw->precipChance%":'')."&nbsp; ".$cw->shortForecast."</li>";
+      }
+      echo "</ul>";
+      //events
+      echo "<ul>";
+      foreach($cd->events as $ce) {
+        echo "<li style='color: ".$ce->style."'>";
+        if($ce->allday) echo "<strong>".$ce->summary."</strong>".($ce->dend!==$ce->dstart? " (thru ".$ce->dendShort.")": "");
+        else echo "<strong>".$ce->timestart."</strong>".(property_exists($ce,'timeend')?'–'.$ce->timeend:'')." ".$ce->summary;
+        echo "</li>";
+      }
+      echo "</ul>";
+    }
+  } else echo "<p>(From cache)</p>";
+  echo "<pre>".$j."</pre>";
 }
 
 function returnJSON($content) {
@@ -310,10 +324,22 @@ function returnJSON($content) {
 }
 
 function logRequest($desc) {
-  if(defined('LOG_DIR') && LOG_DIR && file_exists(__DIR__.'/'.LOG_DIR) && is_writable(__DIR__.'/'.LOG_DIR)) {
-    $logLoc = __DIR__.'/'.LOG_DIR.'/'.$d->format('Y-m-d').'.log';
-    $entry = $d->format('H:i:s').' '.$_SERVER['QUERY_STRING'].': '.$desc."\r\n\r\n";
-    file_put_contents($logLoc,$entry,FILE_APPEND);
+  $entry = TIME_NOW.' '.$_SERVER['QUERY_STRING'].': '.$desc."\r\n";
+  
+  $logResult = '';
+  try {
+    if(!defined('LOG_DIR')) throw new Exception('no log dir defined');
+    if(!LOG_DIR) throw new Exception('no log dir value specified');
+    if(!file_exists(PROJROOT.LOG_DIR)) throw new Exception('log dir does not exist');
+    if(!is_writable(PROJROOT.LOG_DIR)) throw new Exception('log dir not writable');
+    $logLoc = LOG_DIR.'/'.DATE_NOW.'.log';
+    if(file_put_contents(PROJROOT.$logLoc,$entry,FILE_APPEND)===false) throw new Exception('could not write '.$logLoc);
+    $logResult = 'wrote log to '.$logLoc;
+  } catch(Exception $e) {
+    $logResult = $e->getMessage();
   }
+  
+  //for debugging
+  //die($entry.' ('.$logResult.')');
 }
 ?>
