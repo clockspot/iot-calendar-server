@@ -5,6 +5,9 @@ define('DEFAULT_DATE_SHORT_FORMAT', 'm/d');
 define('DEFAULT_DAYS', 2);
 define('NWS_USER_AGENT', 'user agent string here');
 
+define('LOG_DIR','log'); //Relative to project root - if defined and writable, all requests for a given day are recorded under `Y-m-d.log`
+define('CACHE_DIR','cache'); //Relative to project root - if defined and writable, the server response for a given day is stored here as 'Y-m-d.json', and any future requests for the same date are served this instead. (Intended to help mitigate bugs where the client makes too many requests back to back.)
+
 //For /cal – generating JSON for a single calendar at a time
 define('AUTHKEY','random auth string here'); //if present, this will require any requests to /cal to include ?auth=[authkey] in order to process
 

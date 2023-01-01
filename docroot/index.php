@@ -1,14 +1,20 @@
 <?php
 //renders JSON of everything per settings, given auth key
 
-if(!isset($_REQUEST['auth'])) returnJSON('[]');
+if(!isset($_REQUEST['auth'])) {
+  logRequest('no auth provided');
+  returnJSON('[]');
+}
 $auth = $_REQUEST['auth'];
 
 require_once '../settings.php';
 require_once '../vendor/autoload.php';
 
 $authkeys = json_decode(AUTHKEYS);
-if(!property_exists($authkeys,$auth)) returnJSON('[]');
+if(!property_exists($authkeys,$auth)) {
+  logRequest('auth '.$auth.' not accepted');
+  returnJSON('[]');
+}
 $prefs = $authkeys->$auth;
 
 if(property_exists($prefs,'tz')) date_default_timezone_set($prefs->tz);
@@ -22,9 +28,23 @@ function cleanString($prefs,$input) {
   return $input;
 }
 
+$d = new DateTime();
+
+//if we have a cache for today's date, return that instead
+if(defined('CACHE_DIR') && CACHE_DIR) {
+  $cacheLoc = __DIR__.'/'.CACHE_DIR.'/'.$d->format('Y-m-d').'.json';
+  if(file_exists($cacheLoc) && is_readable($cacheLoc)) {
+    $cacheData = file_get_contents($cacheLoc);
+    if($cacheData) { //we've got something to return
+      logRequest('returning '.strlen($cacheData).' bytes from cache');
+      returnJSON($cacheData);
+      die();
+    }
+  }
+}
+
 //prepare the data structure that will be returned as JSON for display
 $c = array(); 
-$d = new DateTime();
 for($i=0; $i<$prefs->days; $i++){
   $date = new stdClass();
   if($i>0) $d->add(new DateInterval('P1D'));
@@ -154,6 +174,7 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       else $ical->initUrl($cal->src);
     } catch (Exception $e) {
       //die($e);
+      logRequest('iCal init failed');
       returnJSON('[]');
     }
     
@@ -259,9 +280,26 @@ if(isset($_REQUEST['sample'])) { //as html
     echo "</ul>";
   }
 
+  logRequest('returning '.strlen(json_encode($j,JSON_PRETTY_PRINT)).' bytes from source (as sample HTML)');
   echo "<pre>".json_encode($j,JSON_PRETTY_PRINT)."</pre>";
 
 } else { //not sample
+  $cacheResult = '';
+  try {
+    if(!defined('CACHE_DIR')) throw new Exception('no cache dir defined');
+    if(!CACHE_DIR) throw new Exception('no cache dir value specified');
+    if(!file_exists(__DIR__.'/'.CACHE_DIR)) throw new Exception('cache dir does not exist');
+    if(!is_writable(__DIR__.'/'.CACHE_DIR)) throw new Exception('cache dir not writable');
+    $cacheLoc = __DIR__.'/'.CACHE_DIR.'/'.$d->format('Y-m-d').'.json';
+    if(file_exists($cacheLoc)) throw new Exception('cache file '.$cacheLoc.' already exists');
+    if(file_put_contents($cacheLoc,json_encode($j))===false) throw new Exception('could not write '.$cacheLoc);
+    $cacheResult = 'wrote cache to '.$cacheLoc;
+  } catch(Exception $e) {
+    $cacheResult = $e->getMessage();
+  }
+  
+  logRequest('returning '.strlen(json_encode($j)).' bytes from source; '.$cacheResult);
+  
   returnJSON(json_encode($j)); 
 }
 
@@ -269,5 +307,13 @@ function returnJSON($content) {
   header('Content-Type: application/json; charset=utf-8');
   header('Content-Length: '.strlen($content)); //prevents Apache from transfer chunking
   die($content);
+}
+
+function logRequest($desc) {
+  if(defined('LOG_DIR') && LOG_DIR && file_exists(__DIR__.'/'.LOG_DIR) && is_writable(__DIR__.'/'.LOG_DIR)) {
+    $logLoc = __DIR__.'/'.LOG_DIR.'/'.$d->format('Y-m-d').'.log';
+    $entry = $d->format('H:i:s').' '.$_SERVER['QUERY_STRING').': '.$desc."\r\n\r\n";
+    file_put_contents($logLoc,$entry,FILE_APPEND);
+  }
 }
 ?>
