@@ -133,7 +133,7 @@ if(property_exists($prefs,'nws')) {
 } //end if nws specified
 
 function weatherReplace($in) {
-  return str_replace(['Showers And Thunderstorms','Slight Chance','Chance','Partly'],['Rain','Ch','Ch','Pt'],$in);
+  return str_replace(['Showers And Thunderstorms','Slight Chance','Chance','Partly','Mostly'],['Rain','Ch','Ch','Pt','Mt'],$in);
 }
 
 //Calendars
