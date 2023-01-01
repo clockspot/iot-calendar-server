@@ -2,7 +2,7 @@
 
 PHP web app that generates content for [iot-calendar-client](https://github.com/clockspot/iot-calendar-client) devices to consume.
 
-<img src="example.jpg">
+<img src="https://user-images.githubusercontent.com/9385318/210183103-a624e4f4-9a1b-46c9-8aa5-d11bb0678466.jpg">
 
 Given a correct auth key from the client, it will process [NWS](https://www.weather.gov/documentation/services-web-api) and iCal data for predefined sources/locations (specified in the settings file) and return it as a [combined JSON object](#full-service-json-example).
 
