@@ -2,9 +2,6 @@
 //renders JSON of everything per settings, given auth key
 
 define('PROJROOT',__DIR__.'/../'); //TODO convert to class
-$d = new DateTime();
-define('DATE_NOW',$d->format('Y-m-d'));
-define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
 
 if(!isset($_REQUEST['auth'])) {
   logRequest('no auth provided');
@@ -32,6 +29,10 @@ function cleanString($prefs,$input) {
   if(property_exists($prefs,'charsetTo')) return iconv('UTF-8', $prefs->charsetTo, $input);
   return $input;
 }
+
+$d = new DateTime(); //after tz has been set
+define('DATE_NOW',$d->format('Y-m-d'));
+define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
 
 //if we have a cache for today's date, return that instead
 if(defined('CACHE_DIR') && CACHE_DIR) {
