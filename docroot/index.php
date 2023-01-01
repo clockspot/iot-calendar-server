@@ -312,7 +312,7 @@ function returnJSON($content) {
 function logRequest($desc) {
   if(defined('LOG_DIR') && LOG_DIR && file_exists(__DIR__.'/'.LOG_DIR) && is_writable(__DIR__.'/'.LOG_DIR)) {
     $logLoc = __DIR__.'/'.LOG_DIR.'/'.$d->format('Y-m-d').'.log';
-    $entry = $d->format('H:i:s').' '.$_SERVER['QUERY_STRING').': '.$desc."\r\n\r\n";
+    $entry = $d->format('H:i:s').' '.$_SERVER['QUERY_STRING'].': '.$desc."\r\n\r\n";
     file_put_contents($logLoc,$entry,FILE_APPEND);
   }
 }
