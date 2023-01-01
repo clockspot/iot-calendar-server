@@ -1,5 +1,6 @@
 {
   "require": {
-      "johngrogg/ics-parser": "^3"
+      "johngrogg/ics-parser": "^3",
+      "auroras-live/suncalc-php": "dev-master"
   }
 }

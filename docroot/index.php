@@ -1,24 +1,59 @@
 <?php
 //renders JSON of everything per settings, given auth key
 
-if(!isset($_REQUEST['auth'])) returnJSON('[]');
+define('PROJROOT',__DIR__.'/../'); //TODO convert to class
+
+if(!isset($_REQUEST['auth'])) {
+  logRequest('no auth provided');
+  returnJSON('[]');
+}
 $auth = $_REQUEST['auth'];
 
 require_once '../settings.php';
 require_once '../vendor/autoload.php';
 
 $authkeys = json_decode(AUTHKEYS);
-if(!property_exists($authkeys,$auth)) returnJSON('[]');
+if(!property_exists($authkeys,$auth)) {
+  logRequest('auth '.$auth.' not accepted');
+  returnJSON('[]');
+}
 $prefs = $authkeys->$auth;
 
 if(property_exists($prefs,'tz')) date_default_timezone_set($prefs->tz);
-if(!property_exists($prefs,'timeFormat')) $prefs->timeFormat = DEFAULT_TIME_FORMAT;
-if(!property_exists($prefs,'dateShortFormat')) $prefs->dateShortFormat = DEFAULT_DATE_SHORT_FORMAT;
-if(!property_exists($prefs,'days')) $prefs->days = DEFAULT_DAYS;
+if(!property_exists($prefs,'timeFormat')) $prefs->timeFormat = (defined('DEFAULT_TIME_FORMAT')? DEFAULT_TIME_FORMAT: 'G:i');
+if(!property_exists($prefs,'dateShortFormat')) $prefs->dateShortFormat = (defined('DEFAULT_DATE_SHORT_FORMAT')? DEFAULT_DATE_SHORT_FORMAT: "n/j");
+if(!property_exists($prefs,'days')) $prefs->days = (defined('DEFAULT_DAYS')? DEFAULT_DAYS: 2);
+if(!property_exists($prefs,'charsetTo') && defined('DEFAULT_CHARSET_TO')) $prefs->charsetTo = DEFAULT_CHARSET_TO;
+
+function cleanString($prefs,$input) {
+  if(property_exists($prefs,'charsetTo')) return iconv('UTF-8', $prefs->charsetTo, $input);
+  return $input;
+}
+
+$d = new DateTime(); //after tz has been set
+define('DATE_NOW',$d->format('Y-m-d'));
+define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
+
+//if we have a cache for today's date, return that instead
+if(defined('CACHE_DIR') && CACHE_DIR) {
+  $cacheLoc = CACHE_DIR.'/'.DATE_NOW.'.json';
+  if(file_exists(PROJROOT.$cacheLoc) && is_readable(PROJROOT.$cacheLoc)) {
+    $cacheData = file_get_contents(PROJROOT.$cacheLoc);
+    if($cacheData) { //we've got something to return
+      if(isset($_REQUEST['sample'])) { //as html
+        returnHTML(null,$cacheData);
+        logRequest('returning '.strlen($cacheData).' bytes from cache (as sample HTML)');
+      } else { //not sample; for real  
+        logRequest('returning '.strlen($cacheData).' bytes from cache');
+        returnJSON($cacheData);
+      }
+      die();
+    }
+  }
+}
 
 //prepare the data structure that will be returned as JSON for display
 $c = array(); 
-$d = new DateTime();
 for($i=0; $i<$prefs->days; $i++){
   $date = new stdClass();
   if($i>0) $d->add(new DateInterval('P1D'));
@@ -31,15 +66,69 @@ for($i=0; $i<$prefs->days; $i++){
   $date->monthShort = $d->format("M");
   if($i==0) {
     if(property_exists($prefs,'latitude') && property_exists($prefs,'longitude')) {
-      $date->sun = date_sun_info($d->format('U'),$prefs->latitude,$prefs->longitude);
-      foreach($date->sun as $k=>$s) {
-        if($s) $date->sun[$k] = date($prefs->timeFormat, $s);
+      //built-in approach
+      // $date->sun = date_sun_info($d->format('U'),$prefs->latitude,$prefs->longitude);
+      // foreach($date->sun as $k=>$s) {
+      //   if($s) $date->sun[$k] = date($prefs->timeFormat, $s);
+      // }
+      //more accurate approach that includes moon stuff
+      $sc = new AurorasLive\SunCalc(new DateTime(), $prefs->latitude, $prefs->longitude);
+      $scst = $sc->getSunTimes();
+      $scmt = $sc->getMoonTimes();
+      $scmi = $sc->getMoonIllumination();
+      $date->sky = new stdClass();
+      $date->sky->sunrise = returnTime($scst['sunrise'],$prefs->timeFormat);
+      $date->sky->sunset = returnTime($scst['sunset'],$prefs->timeFormat);
+      if($prefs->showDawnDusk) { //astronomical sunrise/sunset
+        $date->sky->dawn = returnTime($scst['nightEnd'],$prefs->timeFormat);
+        $date->sky->dusk = returnTime($scst['night'],$prefs->timeFormat);
       }
+      $date->sky->moonfixed = (isset($scmt['alwaysUp'])&&$scmt['alwaysUp']?"Up":(isset($scmt['alwaysDown'])&&$scmt['alwaysDown']?"Down":false));
+      if(!$date->sky->moonfixed) {
+        $date->sky->moonrise = returnTime($scmt['moonrise'],$prefs->timeFormat);
+        $date->sky->moonset = returnTime($scmt['moonset'],$prefs->timeFormat);
+        $date->sky->moonupfirst = ($date->sky->moonset < $date->sky->moonrise);
+      }
+      //$date->sky->moonphase = strval(floor($scmi['phase']*100)).'%'; //percentage
+      $date->sky->moonphase = octophase($scmi['phase']);
+      $date->sky->moonphaseName = phaseName(octophase($scmi['phase']));
     }
   } 
   $date->weather = array();
   $date->events = array();
   $c[$d->format('Y-m-d')] = $date;
+}
+
+function returnTime(&$d,&$f){
+  if(isset($d)) {
+    if($d) {
+      if($d instanceof DateTime) {
+        return $d->format($f);
+      } else return $d;
+    } else return "???";
+  } else return "????";
+}
+
+function octophase($i) {
+  //Converts moonphase from float (0 <= $i < 1)
+  //to eighths, offset forward by a sixteenth so it's centered around the event
+  //e.g. 1/16 to 3/16 = waxing crescent, 3/16 to 5/16 = first quarter...
+  $o = floor((floor($i*16)+1)/2);
+  if($o>=8) $o -= 8;
+  return $o;
+}
+function phaseName($i) {
+  switch($i) {
+    case 0: return "New";
+    case 1: return "1/8";
+    case 2: return "1/4";
+    case 3: return "3/8";
+    case 4: return "Full";
+    case 5: return "5/8";
+    case 6: return "3/4";
+    case 7: return "7/8";
+    default: break;
+  }
 }
 
 //Weather
@@ -65,7 +154,7 @@ if(property_exists($prefs,'nws')) {
         $precipPos = strpos($p->detailedForecast,'Chance of precipitation is ');
         if($precipPos!==false) $precipPos += strlen('Chance of precipitation is ');
         $w->precipChance = intval($precipPos!==false? substr($p->detailedForecast,$precipPos,strpos(substr($p->detailedForecast,$precipPos),"%")) : 0);
-        $w->shortForecast = weatherReplace($p->shortForecast);
+        $w->shortForecast = cleanString($prefs,weatherReplace($p->shortForecast));
         $c[$dt]->weather[] = $w;
       }    
     }
@@ -73,7 +162,7 @@ if(property_exists($prefs,'nws')) {
 } //end if nws specified
 
 function weatherReplace($in) {
-  return str_replace('Showers And Thunderstorms','Rain',$in);
+  return str_replace(['Showers And Thunderstorms','Slight Chance','Chance','Partly','Mostly'],['Rain','Ch','Ch','Pt','Mt'],$in);
 }
 
 //Calendars
@@ -94,6 +183,7 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       else $ical->initUrl($cal->src);
     } catch (Exception $e) {
       //die($e);
+      logRequest('iCal init failed');
       returnJSON('[]');
     }
     
@@ -102,7 +192,7 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
     //echo "<pre>".json_encode($ies,JSON_PRETTY_PRINT)."</pre>";
     foreach($ies as $ie) {
       $event = new stdClass();
-      $event->summary = $ie->summary;
+      $event->summary = cleanString($prefs,$ie->summary);
       //can't use dtstart_tz because that appears to be in the calendar's zone, which may not be the desired zone
       //so we'll use PHP DateTime objects to convert from the event zone to the desired zone (spec'd in settings)
       //extract event's zone (no zone for allday events)
@@ -121,8 +211,8 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       //times
       if(!$event->allday) {
         $event->ltstart = $dstart->format('Hi'); //for sorting
-        $event->timestart = $dstart->format($dstart->format('i')=='00'?$prefs->timeFormatTopOfHour:$prefs->timeFormat);
-        if($prefs->timeIncludeEnd) $event->timeend = $dend->format($dend->format('i')=='00'?$prefs->timeFormatTopOfHour:$prefs->timeFormat);
+        $event->timestart = $dstart->format($dstart->format('i')=='00' && property_exists($prefs,'timeFormatTopOfHour')? $prefs->timeFormatTopOfHour: $prefs->timeFormat);
+        if($prefs->timeIncludeEnd) $event->timeend = $dend->format($dend->format('i')=='00' && property_exists($prefs,'timeFormatTopOfHour')? $prefs->timeFormatTopOfHour: $prefs->timeFormat);
       }
       //duration
       $ddiff = $dstart->diff($dend);
@@ -168,47 +258,89 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
 $j = array();
 foreach($c as $cd) $j[] = $cd; //convert to non-associative array
 
+//write cache if applicable
+$dNow = new DateTime(); //since $d has probably been set forward
+$cacheResult = '';
+try {
+  if(!defined('CACHE_DIR')) throw new Exception('no cache dir defined');
+  if(!CACHE_DIR) throw new Exception('no cache dir value specified');
+  if(!file_exists(PROJROOT.CACHE_DIR)) throw new Exception('cache dir does not exist');
+  if(!is_writable(PROJROOT.CACHE_DIR)) throw new Exception('cache dir not writable');
+  $cacheLoc = CACHE_DIR.'/'.DATE_NOW.'.json';
+  if(file_exists(PROJROOT.$cacheLoc)) throw new Exception('cache file '.$cacheLoc.' already exists');
+  if(file_put_contents(PROJROOT.$cacheLoc,json_encode($j))===false) throw new Exception('could not write '.$cacheLoc);
+  $cacheResult = 'wrote cache to '.$cacheLoc;
+} catch(Exception $e) {
+  $cacheResult = $e->getMessage();
+}
+
+//return
 if(isset($_REQUEST['sample'])) { //as html
-  //Pretend display
-  foreach($c as $cd) {
-    //header
-    if($cd->weekdayRelative=='Today') {
-      echo "<h2>".$cd->weekdayShort." <span style='font-size: 1.5em;'>".$cd->date."</span> ".$cd->monthShort."</h2>";
-      //sunrise, sunset
-      if(property_exists($cd,'sun')) echo "<p>".($cd->sun['sunrise']? "Sunrise <strong>".$cd->sun['sunrise']."</strong>": "")." &nbsp; ".($cd->sun['sunset']? "Sunset <strong>".$cd->sun['sunset']."</strong>": "")."</p>";
-      //moon TODO
-    } else {
-      echo "<h3><strong>".$cd->weekdayRelative." ".$cd->dateShort."</strong></h3>";
-    }
-    //weather
-    echo "<ul style='list-style-type: none; padding-left: 0;'>";
-    foreach($cd->weather as $cw) {
-      echo "<li><strong>";
-      echo ($cw->isDaytime?'High ':'Low ');
-      //echo $cw->name.' ';
-      echo $cw->temperature."°</strong> ".$cw->shortForecast."</li>";
-    }
-    echo "</ul>";
-    //events
-    echo "<ul>";
-    foreach($cd->events as $ce) {
-      echo "<li style='color: ".$ce->style."'>";
-      if($ce->allday) echo "<strong>".$ce->summary."</strong>".($ce->dend!==$ce->dstart? " (thru ".$ce->dendShort.")": "");
-      else echo "<strong>".$ce->timestart."</strong>".(property_exists($ce,'timeend')?'–'.$ce->timeend:'')." ".$ce->summary;
-      echo "</li>";
-    }
-    echo "</ul>";
-  }
-
-  echo "<pre>".json_encode($j,JSON_PRETTY_PRINT)."</pre>";
-
-} else { //not sample
+  returnHTML($c,json_encode($j,JSON_PRETTY_PRINT));
+  logRequest('returning '.strlen(json_encode($j,JSON_PRETTY_PRINT)).' bytes from source (as sample HTML); '.$cacheResult);
+} else { //not sample; for real  
+  logRequest('returning '.strlen(json_encode($j)).' bytes from source; '.$cacheResult);
   returnJSON(json_encode($j)); 
+}
+
+function returnHTML($c,$j) {
+  //just echoes out
+  if($c) {
+    foreach($c as $cd) {
+      //header
+      if($cd->weekdayRelative=='Today') {
+        echo "<h2>$cd->weekdayShort $cd->monthShort $cd->date</h2>";
+        //sunrise, sunset
+        if(property_exists($cd,'sky')) echo "<p><strong>Sun ".$cd->sky->sunrise."</strong>&ndash;".$cd->sky->sunset." &nbsp; <strong>Moon</strong> ".(!$cd->sky->moonupfirst? "<strong>".$cd->sky->moonrise."</strong>&ndash;".$cd->sky->moonset: $cd->sky->moonset."/<strong>".$cd->sky->moonrise."</strong>")."&nbsp; ".$cd->sky->moonphase."</p>";
+      } else {
+        echo "<h3>$cd->weekdayShort $cd->monthShort $cd->date</h3>";
+      }
+      //weather
+      echo "<ul style='list-style-type: none; padding-left: 0;'>";
+      foreach($cd->weather as $cw) {
+        echo "<li><strong>";
+        echo ($cw->isDaytime?'High ':'Low ');
+        //echo $cw->name.' ';
+        echo $cw->temperature."°</strong>".($cw->precipChance?"/$cw->precipChance%":'')."&nbsp; ".$cw->shortForecast."</li>";
+      }
+      echo "</ul>";
+      //events
+      echo "<ul>";
+      foreach($cd->events as $ce) {
+        echo "<li style='color: ".$ce->style."'>";
+        if($ce->allday) echo "<strong>".$ce->summary."</strong>".($ce->dend!==$ce->dstart? " (thru ".$ce->dendShort.")": "");
+        else echo "<strong>".$ce->timestart."</strong>".(property_exists($ce,'timeend')?'–'.$ce->timeend:'')." ".$ce->summary;
+        echo "</li>";
+      }
+      echo "</ul>";
+    }
+  } else echo "<p>(From cache)</p>";
+  echo "<pre>".$j."</pre>";
 }
 
 function returnJSON($content) {
   header('Content-Type: application/json; charset=utf-8');
   header('Content-Length: '.strlen($content)); //prevents Apache from transfer chunking
   die($content);
+}
+
+function logRequest($desc) {
+  $entry = TIME_NOW.' '.$_SERVER['QUERY_STRING'].': '.$desc."\r\n";
+  
+  $logResult = '';
+  try {
+    if(!defined('LOG_DIR')) throw new Exception('no log dir defined');
+    if(!LOG_DIR) throw new Exception('no log dir value specified');
+    if(!file_exists(PROJROOT.LOG_DIR)) throw new Exception('log dir does not exist');
+    if(!is_writable(PROJROOT.LOG_DIR)) throw new Exception('log dir not writable');
+    $logLoc = LOG_DIR.'/'.DATE_NOW.'.log';
+    if(file_put_contents(PROJROOT.$logLoc,$entry,FILE_APPEND)===false) throw new Exception('could not write '.$logLoc);
+    $logResult = 'wrote log to '.$logLoc;
+  } catch(Exception $e) {
+    $logResult = $e->getMessage();
+  }
+  
+  //for debugging
+  //die($entry.' ('.$logResult.')');
 }
 ?>
