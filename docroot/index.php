@@ -34,9 +34,13 @@ $d = new DateTime(); //after tz has been set
 define('DATE_NOW',$d->format('Y-m-d'));
 define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
 
-//if we have a cache for today's date, return that instead
+//account for grace period minutes, which may have us technically showing tomorrow (e.g. if called at 23:59)
+if(defined('GRACE_PERIOD_MINS') && GRACE_PERIOD_MINS) $d->add(new DateInterval('PT'.GRACE_PERIOD_MINS.'M'));
+define('DATE_SHOW',$d->format('Y-m-d'));
+
+//if we have a cache for the date of interest, return that instead
 if(defined('CACHE_DIR') && CACHE_DIR) {
-  $cacheLoc = CACHE_DIR.'/'.DATE_NOW.'.json';
+  $cacheLoc = CACHE_DIR.'/'.DATE_SHOW.'.json';
   if(file_exists(PROJROOT.$cacheLoc) && is_readable(PROJROOT.$cacheLoc)) {
     $cacheData = file_get_contents(PROJROOT.$cacheLoc);
     if($cacheData) { //we've got something to return
@@ -266,7 +270,7 @@ try {
   if(!CACHE_DIR) throw new Exception('no cache dir value specified');
   if(!file_exists(PROJROOT.CACHE_DIR)) throw new Exception('cache dir does not exist');
   if(!is_writable(PROJROOT.CACHE_DIR)) throw new Exception('cache dir not writable');
-  $cacheLoc = CACHE_DIR.'/'.DATE_NOW.'.json';
+  $cacheLoc = CACHE_DIR.'/'.DATE_SHOW.'.json';
   if(file_exists(PROJROOT.$cacheLoc)) throw new Exception('cache file '.$cacheLoc.' already exists');
   if(file_put_contents(PROJROOT.$cacheLoc,json_encode($j))===false) throw new Exception('could not write '.$cacheLoc);
   $cacheResult = 'wrote cache to '.$cacheLoc;
@@ -325,7 +329,7 @@ function returnJSON($content) {
 }
 
 function logRequest($desc) {
-  $entry = TIME_NOW.' '.$_SERVER['QUERY_STRING'].': '.$desc."\r\n";
+  $entry = DATE_NOW.' '.TIME_NOW.' '.$_SERVER['QUERY_STRING'].': '.$desc."\r\n"; //added DATE_NOW since it may differ from DATE_SHOW during the grace period
   
   $logResult = '';
   try {
@@ -333,7 +337,7 @@ function logRequest($desc) {
     if(!LOG_DIR) throw new Exception('no log dir value specified');
     if(!file_exists(PROJROOT.LOG_DIR)) throw new Exception('log dir does not exist');
     if(!is_writable(PROJROOT.LOG_DIR)) throw new Exception('log dir not writable');
-    $logLoc = LOG_DIR.'/'.DATE_NOW.'.log';
+    $logLoc = LOG_DIR.'/'.DATE_SHOW.'.log';
     if(file_put_contents(PROJROOT.$logLoc,$entry,FILE_APPEND)===false) throw new Exception('could not write '.$logLoc);
     $logResult = 'wrote log to '.$logLoc;
   } catch(Exception $e) {

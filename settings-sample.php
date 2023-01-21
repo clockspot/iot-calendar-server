@@ -3,6 +3,8 @@ date_default_timezone_set('America/Chicago');
 define('DEFAULT_TIME_FORMAT', 'H:i');
 define('DEFAULT_DATE_SHORT_FORMAT', 'm/d');
 define('DEFAULT_DAYS', 2);
+define('GRACE_PERIOD_MINS', 120); //if a request is made within this many hours of midnight, it is assumed to be for the next day (and appears under the log for that day)
+define('DEFAULT_CHARSET_TO','ASCII//TRANSLIT');
 define('NWS_USER_AGENT', 'user agent string here');
 
 define('LOG_DIR','log'); //Relative to project root - if defined and writable, all requests for a given day are recorded under `Y-m-d.log`
