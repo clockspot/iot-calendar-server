@@ -3,13 +3,22 @@
 
 define('PROJROOT',__DIR__.'/../'); //TODO convert to class
 
+require_once '../settings.php';
+
+//Work out current date and time - done here since it is used by logRequest
+$d = new DateTime(); //after tz has been set
+define('DATE_NOW',$d->format('Y-m-d'));
+define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
+//account for grace period minutes, which may have us technically showing tomorrow (e.g. if called at 23:59)
+if(defined('GRACE_PERIOD_MINS') && GRACE_PERIOD_MINS) $d->add(new DateInterval('PT'.GRACE_PERIOD_MINS.'M'));
+define('DATE_SHOW',$d->format('Y-m-d'));
+
 if(!isset($_REQUEST['auth'])) {
   logRequest('no auth provided');
   returnJSON('[]');
 }
 $auth = $_REQUEST['auth'];
 
-require_once '../settings.php';
 require_once '../vendor/autoload.php';
 
 $authkeys = json_decode(AUTHKEYS);
@@ -30,14 +39,6 @@ function cleanString($prefs,$input) {
   return $input;
 }
 
-$d = new DateTime(); //after tz has been set
-define('DATE_NOW',$d->format('Y-m-d'));
-define('TIME_NOW',$d->format('H:i:s')); //for logging purposes - I suppose technically it's important to capture at script start in case date/time changes while we are going
-
-//account for grace period minutes, which may have us technically showing tomorrow (e.g. if called at 23:59)
-if(defined('GRACE_PERIOD_MINS') && GRACE_PERIOD_MINS) $d->add(new DateInterval('PT'.GRACE_PERIOD_MINS.'M'));
-define('DATE_SHOW',$d->format('Y-m-d'));
-
 //if we have a cache for the date of interest, return that instead
 if(defined('CACHE_DIR') && CACHE_DIR) {
   $cacheLoc = CACHE_DIR.'/'.DATE_SHOW.'.json';
@@ -55,6 +56,8 @@ if(defined('CACHE_DIR') && CACHE_DIR) {
     }
   }
 }
+
+$logStr = ''; //will be written to the log
 
 //prepare the data structure that will be returned as JSON for display
 $c = array(); 
@@ -145,6 +148,7 @@ if(property_exists($prefs,'nws')) {
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   $out = curl_exec($ch);
   curl_close($ch);
+  $logStr .= ($logStr?'; ':'').writeCacheRaw('Weather',$out);
   $r = json_decode($out);
   if(!(property_exists($r,'status') && property_exists($r,'detail')) && property_exists($r,'properties') && is_object($r->properties) && property_exists($r->properties,'periods') && is_array($r->properties->periods)){
     foreach($r->properties->periods as $p) {
@@ -190,6 +194,10 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
       logRequest('iCal init failed');
       returnJSON('[]');
     }
+    
+    ob_start();
+    var_dump($ical);
+    $logStr .= ($logStr?'; ':'').writeCacheRaw("Calendar".(property_exists($cal,'name')?' '.$cal->name:''),ob_get_clean());
     
     $ies = $ical->eventsFromInterval($prefs->days.' days');
     //echo "<pre>"; var_dump($ies);
@@ -263,32 +271,21 @@ $j = array();
 foreach($c as $cd) $j[] = $cd; //convert to non-associative array
 
 //write cache if applicable
-$dNow = new DateTime(); //since $d has probably been set forward
-$cacheResult = '';
-try {
-  if(!defined('CACHE_DIR')) throw new Exception('no cache dir defined');
-  if(!CACHE_DIR) throw new Exception('no cache dir value specified');
-  if(!file_exists(PROJROOT.CACHE_DIR)) throw new Exception('cache dir does not exist');
-  if(!is_writable(PROJROOT.CACHE_DIR)) throw new Exception('cache dir not writable');
-  $cacheLoc = CACHE_DIR.'/'.DATE_SHOW.'.json';
-  if(file_exists(PROJROOT.$cacheLoc)) throw new Exception('cache file '.$cacheLoc.' already exists');
-  if(file_put_contents(PROJROOT.$cacheLoc,json_encode($j))===false) throw new Exception('could not write '.$cacheLoc);
-  $cacheResult = 'wrote cache to '.$cacheLoc;
-} catch(Exception $e) {
-  $cacheResult = $e->getMessage();
-}
+$logStr .= ($logStr?'; ':'').writeCache(json_encode($j));
 
 //return
 if(isset($_REQUEST['sample'])) { //as html
   returnHTML($c,json_encode($j,JSON_PRETTY_PRINT));
-  logRequest('returning '.strlen(json_encode($j,JSON_PRETTY_PRINT)).' bytes from source (as sample HTML); '.$cacheResult);
+  logRequest('returning '.strlen(json_encode($j,JSON_PRETTY_PRINT)).' bytes from source (as sample HTML); '.$logStr);
 } else { //not sample; for real  
-  logRequest('returning '.strlen(json_encode($j)).' bytes from source; '.$cacheResult);
+  logRequest('returning '.strlen(json_encode($j)).' bytes from source; '.$logStr);
   returnJSON(json_encode($j)); 
 }
 
 function returnHTML($c,$j) {
   //just echoes out
+  ini_set('display_errors',1);
+  error_reporting(E_ALL & ~E_DEPRECATED); //y u no work
   if($c) {
     foreach($c as $cd) {
       //header
@@ -338,7 +335,7 @@ function logRequest($desc) {
     if(!file_exists(PROJROOT.LOG_DIR)) throw new Exception('log dir does not exist');
     if(!is_writable(PROJROOT.LOG_DIR)) throw new Exception('log dir not writable');
     $logLoc = LOG_DIR.'/'.DATE_SHOW.'.log';
-    if(file_put_contents(PROJROOT.$logLoc,$entry,FILE_APPEND)===false) throw new Exception('could not write '.$logLoc);
+    if(file_put_contents(PROJROOT.$logLoc,$entry,FILE_APPEND|LOCK_EX)===false) throw new Exception('could not write '.$logLoc);
     $logResult = 'wrote log to '.$logLoc;
   } catch(Exception $e) {
     $logResult = $e->getMessage();
@@ -346,5 +343,41 @@ function logRequest($desc) {
   
   //for debugging
   //die($entry.' ('.$logResult.')');
+}
+
+function writeCache($content) {
+  $dNow = new DateTime(); //since $d has probably been set forward
+  $cacheResult = '';
+  try {
+    if(!defined('CACHE_DIR')) throw new Exception('no cache dir defined');
+    if(!CACHE_DIR) throw new Exception('no cache dir value specified');
+    if(!file_exists(PROJROOT.CACHE_DIR)) throw new Exception('cache dir does not exist');
+    if(!is_writable(PROJROOT.CACHE_DIR)) throw new Exception('cache dir not writable');
+    $cacheLoc = CACHE_DIR.'/'.DATE_SHOW.'.json';
+    $existed = false;
+    if(file_exists(PROJROOT.$cacheLoc)) $existed = true;
+    if(file_put_contents(PROJROOT.$cacheLoc,$content,LOCK_EX)===false) throw new Exception('could not write '.$cacheLoc);
+    $cacheResult = 'wrote cache to '.$cacheLoc.($existed?' (replaced existing)':'');
+  } catch(Exception $e) {
+    $cacheResult = $e->getMessage();
+  }
+  return $cacheResult;
+}
+
+function writeCacheRaw($header,$content) {
+  $dNow = new DateTime(); //since $d has probably been set forward
+  $cacheResult = '';
+  try {
+    if(!defined('CACHE_RAW_DIR')) throw new Exception('no cache raw dir defined');
+    if(!CACHE_RAW_DIR) throw new Exception('no cache raw dir value specified');
+    if(!file_exists(PROJROOT.CACHE_RAW_DIR)) throw new Exception('cache raw dir does not exist');
+    if(!is_writable(PROJROOT.CACHE_RAW_DIR)) throw new Exception('cache raw dir not writable');
+    $cacheRawLoc = CACHE_RAW_DIR.'/'.DATE_SHOW.'.json';
+    if(file_put_contents(PROJROOT.$cacheRawLoc,$header.":\r\n".$content."\r\n\r\n",FILE_APPEND|LOCK_EX)===false) throw new Exception('could not write cache raw '.$cacheLoc);
+    $cacheResult = 'wrote cache raw '.$header.' to '.$cacheRawLoc;
+  } catch(Exception $e) {
+    $cacheResult = $e->getMessage();
+  }
+  return $cacheResult;
 }
 ?>
