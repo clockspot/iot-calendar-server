@@ -140,16 +140,25 @@ function phaseName($i) {
 
 //Weather
 if(property_exists($prefs,'nws')) {
-  $ch = curl_init();
-  curl_setopt($ch, CURLOPT_URL, "https://api.weather.gov/gridpoints/".$prefs->nws."/forecast");
-  $headers = array('User-Agent: '.NWS_USER_AGENT);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);  
-  curl_setopt($ch, CURLOPT_HEADER, 0);
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  $out = curl_exec($ch);
-  curl_close($ch);
-  $logStr .= ($logStr?'; ':'').writeCacheRaw('Weather',$out);
-  $r = json_decode($out);
+  
+  $attempts = 0;
+  $r = null;
+  while($attempts<2) { //it sometimes gives an error (JSON obj has property "status": 500) but second time works!
+    if($attempts) sleep(2);
+    $attempts++; 
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "https://api.weather.gov/gridpoints/".$prefs->nws."/forecast");
+    $headers = array('User-Agent: '.NWS_USER_AGENT);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);  
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $out = curl_exec($ch);
+    curl_close($ch);
+    $logStr .= ($logStr?'; ':'').writeCacheRaw('Weather (attempt '.$attempts.')',$out);
+    $r = json_decode($out);
+    if(!property_exists($r,'status')) break; //presence of status property seems to indicate a failure
+  }
+  
   if(!(property_exists($r,'status') && property_exists($r,'detail')) && property_exists($r,'properties') && is_object($r->properties) && property_exists($r->properties,'periods') && is_array($r->properties->periods)){
     foreach($r->properties->periods as $p) {
       $dt = substr($p->startTime,0,10);
@@ -203,6 +212,8 @@ if(property_exists($prefs,'cals') && is_array($prefs->cals) && sizeof($prefs->ca
     //echo "<pre>"; var_dump($ies);
     //echo "<pre>".json_encode($ies,JSON_PRETTY_PRINT)."</pre>";
     foreach($ies as $ie) {
+      //TODO how to display ongoing multi-day events that started in the past?
+      //TODO skip events per criteria in settings?
       $event = new stdClass();
       $event->summary = cleanString($prefs,$ie->summary);
       //can't use dtstart_tz because that appears to be in the calendar's zone, which may not be the desired zone
